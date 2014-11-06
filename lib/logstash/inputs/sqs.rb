@@ -23,18 +23,18 @@ require "digest/sha2"
 #
 # The "consumer" identity must have the following permissions on the queue:
 #
-#  * sqs:ChangeMessageVisibility
-#  * sqs:ChangeMessageVisibilityBatch
-#  * sqs:DeleteMessage
-#  * sqs:DeleteMessageBatch
-#  * sqs:GetQueueAttributes
-#  * sqs:GetQueueUrl
-#  * sqs:ListQueues
-#  * sqs:ReceiveMessage
+#  * `sqs:ChangeMessageVisibility`
+#  * `sqs:ChangeMessageVisibilityBatch`
+#  * `sqs:DeleteMessage`
+#  * `sqs:DeleteMessageBatch`
+#  * `sqs:GetQueueAttributes`
+#  * `sqs:GetQueueUrl`
+#  * `sqs:ListQueues`
+#  * `sqs:ReceiveMessage`
 #
 # Typically, you should setup an IAM policy, create a user and apply the IAM policy to the user.
 # A sample policy is as follows:
-#
+# [source,json]
 #     {
 #       "Statement": [
 #         {
