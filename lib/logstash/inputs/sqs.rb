@@ -61,7 +61,6 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   include LogStash::PluginMixins::AwsConfig
 
   config_name "sqs"
-  milestone 1
 
   default :codec, "json"
 
