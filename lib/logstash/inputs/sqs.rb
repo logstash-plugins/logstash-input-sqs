@@ -167,6 +167,14 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
       @logger.info("AWS::SQS::Errors::AWS Internal Error ... retrying SQS request with exponential backoff", :queue => @queue, :sleep_time => sleep_time)
       sleep sleep_time
       run_with_backoff(max_time, sleep_time * 2, &block)
+    rescue AWS::SQS::Errors::SignatureDoesNotMatch
+      @logger.info("AWS::SQS::Errors::AWS Signature Does Not Match ... retrying SQS request with exponential backoff", :queue => @queue, :sleep_time => sleep_time)
+      sleep sleep_time
+      run_with_backoff(max_time, sleep_time * 2, &block)
+    rescue AWS::SQS::Errors::Errors::MissingCredentialsError
+      @logger.info("AWS::SQS::Errors::Missing Credentials Error ... retrying SQS request with exponential backoff", :queue => @queue, :sleep_time => sleep_time)
+      sleep sleep_time
+      run_with_backoff(max_time, sleep_time * 2, &block)
     rescue Exception => bang
       @logger.error("Error reading SQS queue.", :error => bang, :queue => @queue)
       return false
