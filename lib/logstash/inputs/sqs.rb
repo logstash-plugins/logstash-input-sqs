@@ -58,7 +58,7 @@ require "digest/sha2"
 # See http://aws.amazon.com/iam/ for more details on setting up AWS identities.
 #
 class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
-  include LogStash::PluginMixins::AwsConfig
+  include LogStash::PluginMixins::AwsConfig::V2
 
   config_name "sqs"
 
@@ -79,7 +79,7 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   public
   def aws_service_endpoint(region)
     return {
-        :sqs_endpoint => "sqs.#{region}.amazonaws.com"
+        :region => region
     }
   end
 
@@ -88,11 +88,11 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
     @logger.info("Registering SQS input", :queue => @queue)
     require "aws-sdk"
 
-    @sqs = AWS::SQS.new(aws_options_hash)
+    @sqs = Aws::SQS::Client.new(aws_options_hash)
 
     begin
       @logger.debug("Connecting to AWS SQS queue", :queue => @queue)
-      @sqs_queue = @sqs.queues.named(@queue)
+      @queue_url = @sqs.get_queue_url(:queue_name =>  @queue)[:queue_url]
       @logger.info("Connected to AWS SQS queue successfully.", :queue => @queue)
     rescue Exception => e
       @logger.error("Unable to access SQS queue.", :error => e.to_s, :queue => @queue)
@@ -105,30 +105,31 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
     @logger.debug("Polling SQS queue", :queue => @queue)
 
     receive_opts = {
-        :limit => 10,
+        :queue_url => @queue_url,
+        :max_number_of_messages => 10,
         :visibility_timeout => 30,
-        :attributes => [:sent_at]
+        :attribute_names => ["SentTimestamp"]
     }
 
     continue_polling = true
     while running? && continue_polling
       continue_polling = run_with_backoff(60, 1) do
-        @sqs_queue.receive_message(receive_opts) do |message|
+         @sqs.receive_message(receive_opts).messages.each do |message|
           if message
             @codec.decode(message.body) do |event|
               decorate(event)
               if @id_field
-                event[@id_field] = message.id
+                event[@id_field] = message.message_id
               end
               if @md5_field
-                event[@md5_field] = message.md5
+                event[@md5_field] = message.md5_of_body
               end
               if @sent_timestamp_field
-                event[@sent_timestamp_field] = LogStash::Timestamp.new(message.sent_timestamp).utc
+                event[@sent_timestamp_field] = LogStash::Timestamp.new(message.attributes.sent_timestamp).utc
               end
               @logger.debug? && @logger.debug("Processed SQS message", :message_id => message.id, :message_md5 => message.md5, :sent_timestamp => message.sent_timestamp, :queue => @queue)
               output_queue << event
-              message.delete
+              @sqs.delete_message(:queue_url => @queue_url, :receipt_handle => message.receipt_handle)
             end # codec.decode
           end # valid SQS message
         end # receive_message
@@ -137,34 +138,27 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   end # def run
 
   def teardown
-    @sqs_queue = nil
+    @sqs = nil
     finished
   end # def teardown
 
   private
   # Runs an AWS request inside a Ruby block with an exponential backoff in case
-  # we exceed the allowed AWS RequestLimit.
+  # we experience a ServiceError.
   #
   # @param [Integer] max_time maximum amount of time to sleep before giving up.
   # @param [Integer] sleep_time the initial amount of time to sleep before retrying.
   # @param [Block] block Ruby code block to execute.
   def run_with_backoff(max_time, sleep_time, &block)
     if sleep_time > max_time
-      @logger.error("AWS::EC2::Errors::RequestLimitExceeded ... failed.", :queue => @queue)
+      @logger.error("Aws::SQS::Errors::ServiceError Service Error ... failed.", :queue => @queue)
       return false
     end # retry limit exceeded
 
     begin
       block.call
-    rescue AWS::EC2::Errors::RequestLimitExceeded
-      @logger.info("AWS::EC2::Errors::RequestLimitExceeded ... retrying SQS request", :queue => @queue, :sleep_time => sleep_time)
-      sleep sleep_time
-      run_with_backoff(max_time, sleep_time * 2, &block)
-    rescue AWS::EC2::Errors::InstanceLimitExceeded
-      @logger.warn("AWS::EC2::Errors::InstanceLimitExceeded ... aborting SQS message retreival.")
-      return false
-    rescue AWS::SQS::Errors::InternalError
-      @logger.info("AWS::SQS::Errors::AWS Internal Error ... retrying SQS request with exponential backoff", :queue => @queue, :sleep_time => sleep_time)
+    rescue Aws::SQS::Errors::ServiceError
+      @logger.info("Aws::SQS::Errors::ServiceError Service Error ... retrying SQS request with exponential backoff", :queue => @queue, :sleep_time => sleep_time)
       sleep sleep_time
       run_with_backoff(max_time, sleep_time * 2, &block)
     rescue Exception => bang
