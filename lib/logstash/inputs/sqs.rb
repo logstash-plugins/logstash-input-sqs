@@ -76,6 +76,9 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   # Name of the event field in which to store the  SQS message Sent Timestamp
   config :sent_timestamp_field, :validate => :string
 
+  # Time to spend long polling the queue for a message
+  config :wait_time_seconds, :validate => :number, :default => 10
+
   public
   def aws_service_endpoint(region)
     return {
@@ -107,6 +110,7 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
     receive_opts = {
         :limit => 10,
         :visibility_timeout => 30,
+        :wait_time_seconds => @wait_time_seconds,
         :attributes => [:sent_at]
     }
 
