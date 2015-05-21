@@ -177,9 +177,6 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
       @logger.info("AWS::SQS::Errors::AWS Internal Error ... retrying SQS request with exponential backoff", :queue => @queue, :sleep_time => sleep_time)
       sleep sleep_time
       run_with_backoff(max_time, sleep_time * 2, &block)
-    rescue AWS::SQS::Errors::ChecksumError
-      @logger.error("Checksum validation failed ... skipping message retrieval", :message_id => message.id, :message_md5 => message.md5, :sent_timestamp => message.sent_timestamp, :queue => @queue)
-      return true
     rescue Exception => bang
       @logger.error("Error reading SQS queue.", :error => bang, :queue => @queue)
       return false
