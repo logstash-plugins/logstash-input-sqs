@@ -169,7 +169,8 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
       run_with_backoff(max_time, sleep_time * 2, &block)
     rescue Exception => bang
       @logger.error("Error reading SQS queue.", :error => bang, :queue => @queue)
-      return false
+      sleep sleep_time
+      run_with_backoff(max_time, sleep_time * 2, &block)
     end # begin/rescue
     return true
   end # def run_with_backoff
