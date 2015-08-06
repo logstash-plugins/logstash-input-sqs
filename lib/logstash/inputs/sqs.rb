@@ -138,7 +138,6 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   end # def run
 
   def teardown
-    @sqs = nil
     finished
   end # def teardown
 
