@@ -1,9 +1,10 @@
 # encoding: utf-8
+#
 require "logstash/inputs/threadable"
 require "logstash/namespace"
 require "logstash/timestamp"
 require "logstash/plugin_mixins/aws_config"
-require "digest/sha2"
+require "logstash/errors"
 
 # Pull events from an Amazon Web Services Simple Queue Service (SQS) queue.
 #
@@ -73,73 +74,77 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   # Name of the event field in which to store the SQS message MD5 checksum
   config :md5_field, :validate => :string
 
-  # Name of the event field in which to store the  SQS message Sent Timestamp
+  # Name of the event field in which to store the SQS message Sent Timestamp
   config :sent_timestamp_field, :validate => :string
 
-  public
-  def aws_service_endpoint(region)
-    return {
-        :region => region
+  MAX_TIME_BEFORE_GIVING_UP = 60
+  MAX_MESSAGES_TO_FETCH = 10 # Between 1-10 in the AWS-SDK doc
+  SENT_TIMESTAMP = "SentTimestamp"
+  SQS_ATTRIBUTES = [SENT_TIMESTAMP]
+  BACKOFF_SLEEP_TIME = 1
+  BACKOFF_FACTOR = 2
+
+  attr_reader :poller
+
+  def register
+    require "aws-sdk"
+    @logger.info("Registering SQS input", :queue => @queue)
+
+    setup_queue
+  end
+
+  def setup_queue
+    aws_sqs_client = Aws::SQS::Client.new(aws_options_hash)
+    queue_url = aws_sqs_client.get_queue_url(:queue_name =>  @queue)[:queue_url]
+    @poller = Aws::SQS::QueuePoller.new(queue_url, :client => aws_sqs_client)
+  rescue Aws::SQS::Errors::ServiceError => e
+    @logger.error("Cannot establish connection to Amazon SQS", :error => e)
+    raise LogStash::ConfigurationError, "Verify the SQS queue name and your credentials"
+  end
+
+  def polling_options
+    { 
+      :max_number_of_messages => MAX_MESSAGES_TO_FETCH,
+      :attribute_names => SQS_ATTRIBUTES
     }
   end
 
-  public
-  def register
-    @logger.info("Registering SQS input", :queue => @queue)
-    require "aws-sdk"
+  def decode_event(message)
+    @codec.decode(message.body) do |event|
+      return event
+    end
+  end
+  
+  def add_sqs_data(event, message)
+    event[@id_field] = message.message_id if @id_field
+    event[@md5_field] = message.md5_of_body if @md5_field
+    event[@sent_timestamp_field] = convert_epoch_to_timestamp(message.attributes[SENT_TIMESTAMP]) if @sent_timestamp_field
 
-    @sqs = Aws::SQS::Client.new(aws_options_hash)
+    return event
+  end
 
-    begin
-      @logger.debug("Connecting to AWS SQS queue", :queue => @queue)
-      @queue_url = @sqs.get_queue_url(:queue_name =>  @queue)[:queue_url]
-      @logger.info("Connected to AWS SQS queue successfully.", :queue => @queue)
-    rescue Exception => e
-      @logger.error("Unable to access SQS queue.", :error => e.to_s, :queue => @queue)
-      throw e
-    end # begin/rescue
-  end # def register
+  def handle_message(message)
+    event = decode_event(message)
+    add_sqs_data(event, message)
+    decorate(event)
+    return event
+  end
 
-  public
   def run(output_queue)
-    @logger.debug("Polling SQS queue", :queue => @queue)
+    @logger.debug("Polling SQS queue", :polling_options => polling_options)
 
-    receive_opts = {
-        :queue_url => @queue_url,
-        :max_number_of_messages => 10,
-        :visibility_timeout => 30,
-        :attribute_names => ["SentTimestamp"]
-    }
+    run_with_backoff do
+      poller.poll(polling_options) do |messages, stats|
+        messages.each do |message|
+          output_queue << handle_message(message)
+        end
 
-    continue_polling = true
-    while running? && continue_polling
-      continue_polling = run_with_backoff(60, 1) do
-         @sqs.receive_message(receive_opts).messages.each do |message|
-          if message
-            @codec.decode(message.body) do |event|
-              decorate(event)
-              if @id_field
-                event[@id_field] = message.message_id
-              end
-              if @md5_field
-                event[@md5_field] = message.md5_of_body
-              end
-              if @sent_timestamp_field
-                event[@sent_timestamp_field] = LogStash::Timestamp.new(message.attributes.sent_timestamp).utc
-              end
-              @logger.debug? && @logger.debug("Processed SQS message", :message_id => message.id, :message_md5 => message.md5, :sent_timestamp => message.sent_timestamp, :queue => @queue)
-              output_queue << event
-              @sqs.delete_message(:queue_url => @queue_url, :receipt_handle => message.receipt_handle)
-            end # codec.decode
-          end # valid SQS message
-        end # receive_message
-      end # run_with_backoff
-    end # polling loop
-  end # def run
-
-  def teardown
-    finished
-  end # def teardown
+        @logger.debug("SQS Stats:", :request_count => stats.request_count,
+                      :messages_count => stats.message_count,
+                      :last_message_received_at => stats.last_message_received_at) if @logger.debug?
+      end
+    end
+  end
 
   private
   # Runs an AWS request inside a Ruby block with an exponential backoff in case
@@ -148,22 +153,26 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   # @param [Integer] max_time maximum amount of time to sleep before giving up.
   # @param [Integer] sleep_time the initial amount of time to sleep before retrying.
   # @param [Block] block Ruby code block to execute.
-  def run_with_backoff(max_time, sleep_time, &block)
-    if sleep_time > max_time
-      @logger.error("Aws::SQS::Errors::ServiceError Service Error ... failed.", :queue => @queue)
-      return false
-    end # retry limit exceeded
+  def run_with_backoff(max_time = MAX_TIME_BEFORE_GIVING_UP, sleep_time = BACKOFF_SLEEP_TIME, &block)
+    next_sleep = sleep_time
 
     begin
       block.call
-    rescue Aws::SQS::Errors::ServiceError
-      @logger.info("Aws::SQS::Errors::ServiceError Service Error ... retrying SQS request with exponential backoff", :queue => @queue, :sleep_time => sleep_time)
-      sleep sleep_time
-      run_with_backoff(max_time, sleep_time * 2, &block)
-    rescue Exception => bang
-      @logger.error("Error reading SQS queue.", :error => bang, :queue => @queue)
-      return false
-    end # begin/rescue
-    return true
-  end # def run_with_backoff
+      next_sleep = sleep_time
+    rescue Aws::SQS::Errors::ServiceError => e
+      @logger.warn("Aws::SQS::Errors::ServiceError ... retrying SQS request with exponential backoff", :queue => @queue, :sleep_time => sleep_time, :error => e)
+      sleep(next_sleep)
+      next_sleep =  next_sleep > max_time ? sleep_time : sleep_time * BACKOFF_FACTOR 
+
+      retry
+    rescue LogStash::ShutdownSignal
+      # The pipeline is currently shutting down.
+      # we can safely rescue and return, all unacked sqs messages will be resend
+      # when the pipeline is up again.
+    end
+  end
+
+  def convert_epoch_to_timestamp(time)
+    LogStash::Timestamp.at(time.to_i / 1000)
+  end
 end # class LogStash::Inputs::SQS
