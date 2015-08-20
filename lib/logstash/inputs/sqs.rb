@@ -61,6 +61,14 @@ require "logstash/errors"
 class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   include LogStash::PluginMixins::AwsConfig::V2
 
+  MAX_TIME_BEFORE_GIVING_UP = 60
+  MAX_MESSAGES_TO_FETCH = 10 # Between 1-10 in the AWS-SDK doc
+  SENT_TIMESTAMP = "SentTimestamp"
+  SQS_ATTRIBUTES = [SENT_TIMESTAMP]
+  BACKOFF_SLEEP_TIME = 1
+  BACKOFF_FACTOR = 2
+  DEFAULT_POLLING_FREQUENCY = 20
+
   config_name "sqs"
 
   default :codec, "json"
@@ -77,12 +85,8 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   # Name of the event field in which to store the SQS message Sent Timestamp
   config :sent_timestamp_field, :validate => :string
 
-  MAX_TIME_BEFORE_GIVING_UP = 60
-  MAX_MESSAGES_TO_FETCH = 10 # Between 1-10 in the AWS-SDK doc
-  SENT_TIMESTAMP = "SentTimestamp"
-  SQS_ATTRIBUTES = [SENT_TIMESTAMP]
-  BACKOFF_SLEEP_TIME = 1
-  BACKOFF_FACTOR = 2
+  # Polling frequency, default is 20 seconds
+  config :polling_frequency, :validate => :number, :default => DEFAULT_POLLING_FREQUENCY
 
   attr_reader :poller
 
@@ -105,7 +109,8 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   def polling_options
     { 
       :max_number_of_messages => MAX_MESSAGES_TO_FETCH,
-      :attribute_names => SQS_ATTRIBUTES
+      :attribute_names => SQS_ATTRIBUTES,
+      :wait_time_seconds => @polling_frequency
     }
   end
 
