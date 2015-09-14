@@ -5,11 +5,12 @@ require "logstash/event"
 require "logstash/json"
 require "aws-sdk"
 require "spec_helper"
+require "ostruct"
 
 describe LogStash::Inputs::SQS do
   let(:queue_name) { "the-infinite-pandora-box" }
-  let(:queue_url) { "https://sqs.test.local/#{queue}" }
-  let(:options) do
+  let(:queue_url) { "https://sqs.test.local/#{queue_name}" }
+  let(:config) do
     {
       "region" => "us-east-1",
       "access_key_id" => "123",
@@ -18,14 +19,14 @@ describe LogStash::Inputs::SQS do
     }
   end
 
-  let(:input) { LogStash::Inputs::SQS.new(options) }
-
+  let(:input) { LogStash::Inputs::SQS.new(config) }
   let(:decoded_message) { { "bonjour" => "awesome" }  }
   let(:encoded_message)  { double("sqs_message", :body => LogStash::Json::dump(decoded_message)) }
 
   subject { input }
 
   let(:mock_sqs) { Aws::SQS::Client.new({ :stub_responses => true }) }
+
 
   context "with invalid credentials" do
     before do
@@ -47,6 +48,33 @@ describe LogStash::Inputs::SQS do
       expect { subject.register }.not_to raise_error
     end
 
+    context "when interrupting the plugin" do
+      before do
+        expect(Aws::SQS::Client).to receive(:new).and_return(mock_sqs)
+        expect(mock_sqs).to receive(:get_queue_url).with({ :queue_name => queue_name }).and_return({:queue_url => queue_url })
+        expect(subject).to receive(:poller).and_return(mock_sqs).at_least(:once)
+
+        # We have to make sure we create a bunch of events
+        # so we actually really try to stop the plugin.
+        # 
+        # rspec's `and_yield` allow you to define a fix amount of possible 
+        # yielded values and doesn't allow you to create infinite loop.
+        # And since we are actually creating thread we need to make sure
+        # we have enough work to keep the thread working until we kill it..
+        #
+        # I haven't found a way to make it rspec friendly
+        mock_sqs.instance_eval do
+          def poll(polling_options = {})
+            loop do
+              yield [OpenStruct.new(:body => LogStash::Json::dump({ "message" => "hello world"}))], OpenStruct.new
+            end
+          end
+        end
+      end
+
+      it_behaves_like "an interruptible input plugin"
+    end
+
     context "enrich event" do
       let(:event) { LogStash::Event.new }
 
@@ -66,7 +94,7 @@ describe LogStash::Inputs::SQS do
       subject { input.add_sqs_data(event, message) }
 
       context "when the option is specified" do
-        let(:options) do
+        let(:config) do
           {
             "region" => "us-east-1",
             "access_key_id" => "123",
@@ -107,7 +135,7 @@ describe LogStash::Inputs::SQS do
     end
 
     context "when decoding body" do
-      subject { LogStash::Inputs::SQS::new(options.merge({ "codec" => "json" })) }
+      subject { LogStash::Inputs::SQS::new(config.merge({ "codec" => "json" })) }
 
       it "uses the specified codec" do
         expect(subject.decode_event(encoded_message)["bonjour"]).to eq(decoded_message["bonjour"])
