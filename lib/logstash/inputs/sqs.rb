@@ -94,7 +94,6 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
     require "aws-sdk"
     @logger.info("Registering SQS input", :queue => @queue)
 
-    monkey_patch_aws_retryable_plugin!
     setup_queue
   end
 
@@ -141,6 +140,8 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
 
     run_with_backoff do
       poller.poll(polling_options) do |messages, stats|
+        break if stop?
+
         messages.each do |message|
           output_queue << handle_message(message)
         end
@@ -171,25 +172,10 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
       next_sleep =  next_sleep > max_time ? sleep_time : sleep_time * BACKOFF_FACTOR 
 
       retry
-    rescue LogStash::ShutdownSignal
-      # The pipeline is currently shutting down.
-      # we can safely rescue and return, all unacked sqs messages will be resend
-      # when the pipeline is up again.
     end
   end
 
   def convert_epoch_to_timestamp(time)
     LogStash::Timestamp.at(time.to_i / 1000)
-  end
-
-  def monkey_patch_aws_retryable_plugin!
-    Aws::Plugins::RetryErrors::ErrorInspector.module_eval do
-      def networking?
-        !@error.is_a?(LogStash::ShutdownSignal) &&
-          (@error.is_a?(Seahorse::Client::NetworkingError) ||
-           Aws::Plugins::RetryErrors::ErrorInspector::NETWORKING_ERRORS.include?(@name) ||
-           @http_status_code == 0)
-      end
-    end
   end
 end # class LogStash::Inputs::SQS
