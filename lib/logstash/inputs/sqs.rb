@@ -147,7 +147,7 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
         end
 
         @logger.debug("SQS Stats:", :request_count => stats.request_count,
-                      :messages_count => stats.message_count,
+                      :received_message_count => stats.received_message_count,
                       :last_message_received_at => stats.last_message_received_at) if @logger.debug?
       end
     end
