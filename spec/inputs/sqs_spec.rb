@@ -107,15 +107,15 @@ describe LogStash::Inputs::SQS do
         end
 
         it "add the `message_id`" do
-          expect(subject[id_field]).to eq(message_id)
+          expect(subject.get(id_field)).to eq(message_id)
         end
 
         it "add the `md5_of_body`" do
-          expect(subject[md5_field]).to eq(md5_of_body)
+          expect(subject.get(md5_field)).to eq(md5_of_body)
         end
 
         it "add the `sent_timestamp`" do
-          expect(subject[sent_timestamp_field].to_i).to eq(sent_timestamp.to_i)
+          expect(subject.get(sent_timestamp_field).to_i).to eq(sent_timestamp.to_i)
         end
       end
 
@@ -138,7 +138,7 @@ describe LogStash::Inputs::SQS do
       subject { LogStash::Inputs::SQS::new(config.merge({ "codec" => "json" })) }
 
       it "uses the specified codec" do
-        expect(subject.decode_event(encoded_message)["bonjour"]).to eq(decoded_message["bonjour"])
+        expect(subject.decode_event(encoded_message).get("bonjour")).to eq(decoded_message["bonjour"])
       end
     end
 
@@ -150,7 +150,7 @@ describe LogStash::Inputs::SQS do
       it "creates logstash event" do
         expect(mock_sqs).to receive(:poll).with(anything()).and_yield([encoded_message], double("stats"))
         subject.run(queue)
-        expect(queue.pop["bonjour"]).to eq(decoded_message["bonjour"])
+        expect(queue.pop.get("bonjour")).to eq(decoded_message["bonjour"])
       end
     end
 

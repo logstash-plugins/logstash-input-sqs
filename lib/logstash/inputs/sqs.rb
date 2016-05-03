@@ -121,9 +121,9 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   end
   
   def add_sqs_data(event, message)
-    event[@id_field] = message.message_id if @id_field
-    event[@md5_field] = message.md5_of_body if @md5_field
-    event[@sent_timestamp_field] = convert_epoch_to_timestamp(message.attributes[SENT_TIMESTAMP]) if @sent_timestamp_field
+    event.set(@id_field, message.message_id) if @id_field
+    event.set(@md5_field, message.md5_of_body) if @md5_field
+    event.set(@sent_timestamp_field, convert_epoch_to_timestamp(message.attributes[SENT_TIMESTAMP])) if @sent_timestamp_field
 
     return event
   end
