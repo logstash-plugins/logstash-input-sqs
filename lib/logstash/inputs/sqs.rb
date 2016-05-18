@@ -107,31 +107,18 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   end
 
   def polling_options
-    { 
+    {
       :max_number_of_messages => MAX_MESSAGES_TO_FETCH,
       :attribute_names => SQS_ATTRIBUTES,
       :wait_time_seconds => @polling_frequency
     }
   end
 
-  def decode_event(message)
-    @codec.decode(message.body) do |event|
-      return event
-    end
-  end
-  
   def add_sqs_data(event, message)
     event.set(@id_field, message.message_id) if @id_field
     event.set(@md5_field, message.md5_of_body) if @md5_field
     event.set(@sent_timestamp_field, convert_epoch_to_timestamp(message.attributes[SENT_TIMESTAMP])) if @sent_timestamp_field
 
-    return event
-  end
-
-  def handle_message(message)
-    event = decode_event(message)
-    add_sqs_data(event, message)
-    decorate(event)
     return event
   end
 
@@ -143,7 +130,12 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
         break if stop?
 
         messages.each do |message|
-          output_queue << handle_message(message)
+          @codec.decode(message.body) do |event|
+            @logger.debug(event.to_json)
+            add_sqs_data(event, message)
+            decorate(event)
+            output_queue << event
+          end
         end
 
         @logger.debug("SQS Stats:", :request_count => stats.request_count,
@@ -169,7 +161,7 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
     rescue Aws::SQS::Errors::ServiceError => e
       @logger.warn("Aws::SQS::Errors::ServiceError ... retrying SQS request with exponential backoff", :queue => @queue, :sleep_time => sleep_time, :error => e)
       sleep(next_sleep)
-      next_sleep =  next_sleep > max_time ? sleep_time : sleep_time * BACKOFF_FACTOR 
+      next_sleep =  next_sleep > max_time ? sleep_time : sleep_time * BACKOFF_FACTOR
 
       retry
     end
