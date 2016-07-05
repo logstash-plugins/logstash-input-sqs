@@ -45,8 +45,7 @@ require "logstash/errors"
 #             "sqs:GetQueueAttributes",
 #             "sqs:GetQueueUrl",
 #             "sqs:ListQueues",
-#             "sqs:SendMessage",
-#             "sqs:SendMessageBatch"
+#             "sqs:ReceiveMessage"
 #           ],
 #           "Effect": "Allow",
 #           "Resource": [
@@ -56,7 +55,9 @@ require "logstash/errors"
 #       ]
 #     }
 #
-# See http://aws.amazon.com/iam/ for more details on setting up AWS identities.
+# You can also [assign specific permissions to a specific queue](http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSGettingStartedGuide/QueuePermissions.html).
+#
+# See http://aws.amazon.com/iam/ for more details on setting up AWS identities and permissions.
 #
 class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   include LogStash::PluginMixins::AwsConfig::V2
