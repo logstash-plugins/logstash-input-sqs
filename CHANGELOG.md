@@ -1,3 +1,6 @@
+## 3.0.3
+  - Monkey-patch the AWS-SDK to prevent "uninitialized constant" errors.
+
 ## 3.0.2
   - Relax constraint on logstash-core-plugin-api to >= 1.60 <= 2.99
 
