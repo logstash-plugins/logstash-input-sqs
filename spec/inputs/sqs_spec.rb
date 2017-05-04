@@ -1,10 +1,10 @@
 # encoding: utf-8
+require "spec_helper"
 require "logstash/inputs/sqs"
 require "logstash/errors"
 require "logstash/event"
 require "logstash/json"
 require "aws-sdk"
-require "spec_helper"
 require "ostruct"
 
 describe LogStash::Inputs::SQS do
