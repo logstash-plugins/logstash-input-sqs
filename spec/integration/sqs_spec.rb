@@ -1,9 +1,9 @@
 # encoding: utf-8
+require "spec_helper"
 require "logstash/inputs/sqs"
 require "logstash/event"
 require "logstash/json"
 require "aws-sdk"
-require "spec_helper"
 require_relative "../support/helpers"
 require "thread"
 
