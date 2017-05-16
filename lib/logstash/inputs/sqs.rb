@@ -52,6 +52,7 @@ Aws.eager_autoload!
 #             "sqs:GetQueueAttributes",
 #             "sqs:GetQueueUrl",
 #             "sqs:ListQueues",
+#             "sqs:ReceiveMessage",
 #             "sqs:SendMessage",
 #             "sqs:SendMessageBatch"
 #           ],
