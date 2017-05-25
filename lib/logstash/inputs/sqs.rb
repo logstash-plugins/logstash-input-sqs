@@ -83,6 +83,9 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   # Name of the SQS Queue name to pull messages from. Note that this is just the name of the queue, not the URL or ARN.
   config :queue, :validate => :string, :required => true
 
+  # Account ID of the AWS account which owns the queue.
+  config :queue_aws_account_id, :validate => :string, :required => false
+
   # Name of the event field in which to store the SQS message ID
   config :id_field, :validate => :string
 
@@ -99,14 +102,18 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
 
   def register
     require "aws-sdk"
-    @logger.info("Registering SQS input", :queue => @queue)
+    @logger.info("Registering SQS input", :queue => @queue, :queue_aws_account_id => @queue_aws_account_id)
 
     setup_queue
   end
 
   def setup_queue
     aws_sqs_client = Aws::SQS::Client.new(aws_options_hash)
-    queue_url = aws_sqs_client.get_queue_url(:queue_name =>  @queue)[:queue_url]
+    if @queue_aws_account_id
+      queue_url = aws_sqs_client.get_queue_url({:queue_name => @queue, :queue_owner_aws_account_id => @queue_aws_account_id})[:queue_url]
+    else
+      queue_url = aws_sqs_client.get_queue_url(:queue_name => @queue)[:queue_url]
+    end
     @poller = Aws::SQS::QueuePoller.new(queue_url, :client => aws_sqs_client)
   rescue Aws::SQS::Errors::ServiceError => e
     @logger.error("Cannot establish connection to Amazon SQS", :error => e)
