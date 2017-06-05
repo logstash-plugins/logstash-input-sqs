@@ -145,6 +145,10 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   def run(output_queue)
     @logger.debug("Polling SQS queue", :polling_options => polling_options)
 
+    poller.before_request do |stats|
+        throw :stop_polling if stop?
+    end
+
     run_with_backoff do
       poller.poll(polling_options) do |messages, stats|
         break if stop?
