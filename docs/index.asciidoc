@@ -60,8 +60,9 @@ A sample policy is as follows:
             "sqs:GetQueueAttributes",
             "sqs:GetQueueUrl",
             "sqs:ListQueues",
-            "sqs:SendMessage",
-            "sqs:SendMessageBatch"
+            "sqs:DeleteMessage",
+            "sqs:DeleteMessageBatch",
+            "sqs:ReceiveMessage"
           ],
           "Effect": "Allow",
           "Resource": [
