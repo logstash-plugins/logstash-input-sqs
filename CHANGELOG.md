@@ -1,3 +1,7 @@
+## 3.1.0
+  - Add documentation for endpoint, role_arn and role_session_name #46
+  - Fix sample IAM policy to match to match the documentation #32
+
 ## 3.0.6
   - Update gemspec summary
 
