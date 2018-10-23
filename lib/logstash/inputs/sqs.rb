@@ -121,25 +121,19 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
     }
   end
 
-  def decode_event(message)
-    @codec.decode(message.body) do |event|
-      return event
-    end
-  end
-  
   def add_sqs_data(event, message)
     event.set(@id_field, message.message_id) if @id_field
     event.set(@md5_field, message.md5_of_body) if @md5_field
     event.set(@sent_timestamp_field, convert_epoch_to_timestamp(message.attributes[SENT_TIMESTAMP])) if @sent_timestamp_field
-
-    return event
+    event
   end
 
-  def handle_message(message)
-    event = decode_event(message)
-    add_sqs_data(event, message)
-    decorate(event)
-    return event
+  def handle_message(message, output_queue)
+    @codec.decode(message.body) do |event|
+      add_sqs_data(event, message)
+      decorate(event)
+      output_queue << event
+    end
   end
 
   def run(output_queue)
@@ -148,11 +142,7 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
     run_with_backoff do
       poller.poll(polling_options) do |messages, stats|
         break if stop?
-
-        messages.each do |message|
-          output_queue << handle_message(message)
-        end
-
+        messages.each {|message| handle_message(message, output_queue) }
         @logger.debug("SQS Stats:", :request_count => stats.request_count,
                       :received_message_count => stats.received_message_count,
                       :last_message_received_at => stats.last_message_received_at) if @logger.debug?

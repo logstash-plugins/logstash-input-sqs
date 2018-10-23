@@ -138,7 +138,8 @@ describe LogStash::Inputs::SQS do
       subject { LogStash::Inputs::SQS::new(config.merge({ "codec" => "json" })) }
 
       it "uses the specified codec" do
-        expect(subject.decode_event(encoded_message).get("bonjour")).to eq(decoded_message["bonjour"])
+        subject.handle_message(encoded_message, queue)
+        expect(queue.pop.get("bonjour")).to eq(decoded_message["bonjour"])
       end
     end
 
@@ -151,6 +152,21 @@ describe LogStash::Inputs::SQS do
         expect(mock_sqs).to receive(:poll).with(anything()).and_yield([encoded_message], double("stats"))
         subject.run(queue)
         expect(queue.pop.get("bonjour")).to eq(decoded_message["bonjour"])
+      end
+
+      context 'can create multiple events' do
+        require "logstash/codecs/json_lines"
+        let(:config) { super.merge({ "codec" => "json_lines" }) }
+        let(:first_message) { { "sequence" => "first" } }
+        let(:second_message) { { "sequence" => "second" } }
+        let(:encoded_message)  { double("sqs_message", :body => "#{LogStash::Json::dump(first_message)}\n#{LogStash::Json::dump(second_message)}\n") }
+
+        it 'creates multiple events' do
+          expect(mock_sqs).to receive(:poll).with(anything()).and_yield([encoded_message], double("stats"))
+          subject.run(queue)
+          events = queue.map{ |e|e.get('sequence')}
+          expect(events).to match_array([first_message['sequence'], second_message['sequence']])
+        end
       end
     end
 
