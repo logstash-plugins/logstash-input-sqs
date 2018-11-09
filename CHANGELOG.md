@@ -1,3 +1,6 @@
+## 3.1.2
+  - Added support for multiple events inside same message from SQS [#48](https://github.com/logstash-plugins/logstash-input-sqs/pull/48/files) 
+
 ## 3.1.1
   - Docs: Set the default_codec doc attribute.
 
