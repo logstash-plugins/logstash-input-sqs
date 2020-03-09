@@ -1,5 +1,6 @@
 # encoding: utf-8
 require "spec_helper"
+require "logstash/devutils/rspec/shared_examples"
 require "logstash/inputs/sqs"
 require "logstash/errors"
 require "logstash/event"
