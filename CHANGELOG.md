@@ -1,3 +1,6 @@
+## 3.1.3
+  - Fix: retry networking errors (with backoff) [#57](https://github.com/logstash-plugins/logstash-input-sqs/pull/57)
+
 ## 3.1.2
   - Added support for multiple events inside same message from SQS [#48](https://github.com/logstash-plugins/logstash-input-sqs/pull/48/files) 
 
