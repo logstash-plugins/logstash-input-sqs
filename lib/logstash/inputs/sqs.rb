@@ -109,7 +109,7 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
     queue_url = aws_sqs_client.get_queue_url(:queue_name =>  @queue)[:queue_url]
     @poller = Aws::SQS::QueuePoller.new(queue_url, :client => aws_sqs_client)
   rescue Aws::SQS::Errors::ServiceError => e
-    @logger.error("Cannot establish connection to Amazon SQS", :error => e)
+    @logger.error("Cannot establish connection to Amazon SQS", exception_details(e))
     raise LogStash::ConfigurationError, "Verify the SQS queue name and your credentials"
   end
 
@@ -151,28 +151,39 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   end
 
   private
+
   # Runs an AWS request inside a Ruby block with an exponential backoff in case
   # we experience a ServiceError.
   #
-  # @param [Integer] max_time maximum amount of time to sleep before giving up.
-  # @param [Integer] sleep_time the initial amount of time to sleep before retrying.
   # @param [Block] block Ruby code block to execute.
-  def run_with_backoff(max_time = MAX_TIME_BEFORE_GIVING_UP, sleep_time = BACKOFF_SLEEP_TIME, &block)
-    next_sleep = sleep_time
-
+  def run_with_backoff(&block)
+    sleep_time = BACKOFF_SLEEP_TIME
     begin
       block.call
-      next_sleep = sleep_time
+      sleep_time = BACKOFF_SLEEP_TIME
     rescue Aws::SQS::Errors::ServiceError => e
-      @logger.warn("Aws::SQS::Errors::ServiceError ... retrying SQS request with exponential backoff", :queue => @queue, :sleep_time => sleep_time, :error => e)
-      sleep(next_sleep)
-      next_sleep =  next_sleep > max_time ? sleep_time : sleep_time * BACKOFF_FACTOR 
-
+      @logger.warn("service error ... retrying SQS with exponential backoff", exception_details(e, sleep_time))
+      sleep_time = backoff_sleep(sleep_time)
       retry
     end
+  end
+
+  def backoff_sleep(sleep_time)
+    sleep(sleep_time)
+    sleep_time > MAX_TIME_BEFORE_GIVING_UP ? sleep_time : sleep_time * BACKOFF_FACTOR
   end
 
   def convert_epoch_to_timestamp(time)
     LogStash::Timestamp.at(time.to_i / 1000)
   end
+
+  def exception_details(e, sleep_time = nil)
+    details = { :queue => @queue, :exception => e.class, :message => e.message }
+    details[:code] = e.code if e.is_a?(Aws::SQS::Errors::ServiceError) && e.code
+    details[:cause] = e.cause if e.respond_to?(:cause) && e.cause
+    details[:sleep_time] = sleep_time if sleep_time
+    details[:backtrace] = e.backtrace if @logger.debug?
+    details
+  end
+
 end # class LogStash::Inputs::SQS
