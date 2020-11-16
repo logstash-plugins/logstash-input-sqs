@@ -202,6 +202,7 @@ describe LogStash::Inputs::SQS do
       end
 
       context "SQS error (retries)" do
+
         it "retry to fetch messages" do
           sleep_time = LogStash::Inputs::SQS::BACKOFF_SLEEP_TIME
           expect(subject).to receive(:sleep).with(sleep_time)
@@ -223,6 +224,37 @@ describe LogStash::Inputs::SQS do
           expect(queue.size).to eq(1)
           expect(queue.pop).to eq(payload)
         end
+
+      end
+
+      context "networking error" do
+
+        before(:all) { require 'seahorse/client/networking_error' }
+
+        it "retry to fetch messages" do
+          sleep_time = LogStash::Inputs::SQS::BACKOFF_SLEEP_TIME
+          expect(subject).to receive(:sleep).with(sleep_time).twice
+
+          error_count = 0
+          expect(mock_sqs).to receive(:poll).with(anything()).at_most(5) do
+            error_count += 1
+            if error_count == 1
+              raise Seahorse::Client::NetworkingError.new(Net::OpenTimeout.new, 'timeout')
+            end
+            if error_count == 3
+              raise Seahorse::Client::NetworkingError.new(SocketError.new('spec-error'))
+            end
+
+            queue << payload
+          end
+
+          subject.run(queue)
+          subject.run(queue)
+
+          expect(queue.size).to eq(2)
+          expect(queue.pop).to eq(payload)
+        end
+
       end
 
       context "other error" do

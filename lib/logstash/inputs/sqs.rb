@@ -108,7 +108,7 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
     aws_sqs_client = Aws::SQS::Client.new(aws_options_hash)
     queue_url = aws_sqs_client.get_queue_url(:queue_name =>  @queue)[:queue_url]
     @poller = Aws::SQS::QueuePoller.new(queue_url, :client => aws_sqs_client)
-  rescue Aws::SQS::Errors::ServiceError => e
+  rescue Aws::SQS::Errors::ServiceError, Seahorse::Client::NetworkingError => e
     @logger.error("Cannot establish connection to Amazon SQS", exception_details(e))
     raise LogStash::ConfigurationError, "Verify the SQS queue name and your credentials"
   end
@@ -161,8 +161,8 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
     begin
       block.call
       sleep_time = BACKOFF_SLEEP_TIME
-    rescue Aws::SQS::Errors::ServiceError => e
-      @logger.warn("service error ... retrying SQS with exponential backoff", exception_details(e, sleep_time))
+    rescue Aws::SQS::Errors::ServiceError, Seahorse::Client::NetworkingError => e
+      @logger.warn("SQS error ... retrying with exponential backoff", exception_details(e, sleep_time))
       sleep_time = backoff_sleep(sleep_time)
       retry
     end
@@ -180,7 +180,7 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   def exception_details(e, sleep_time = nil)
     details = { :queue => @queue, :exception => e.class, :message => e.message }
     details[:code] = e.code if e.is_a?(Aws::SQS::Errors::ServiceError) && e.code
-    details[:cause] = e.cause if e.respond_to?(:cause) && e.cause
+    details[:cause] = e.original_error if e.respond_to?(:original_error) && e.original_error # Seahorse::Client::NetworkingError
     details[:sleep_time] = sleep_time if sleep_time
     details[:backtrace] = e.backtrace if @logger.debug?
     details
