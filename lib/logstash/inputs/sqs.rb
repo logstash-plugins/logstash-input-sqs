@@ -160,7 +160,6 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
     sleep_time = BACKOFF_SLEEP_TIME
     begin
       block.call
-      sleep_time = BACKOFF_SLEEP_TIME
     rescue Aws::SQS::Errors::ServiceError, Seahorse::Client::NetworkingError => e
       @logger.warn("SQS error ... retrying with exponential backoff", exception_details(e, sleep_time))
       sleep_time = backoff_sleep(sleep_time)
