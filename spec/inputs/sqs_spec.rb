@@ -178,7 +178,7 @@ describe LogStash::Inputs::SQS do
         expect(subject).to receive(:poller).and_return(mock_sqs).at_least(:once)
       end
 
-      context "SQS errors" do
+      context "SQS error" do
         it "retry to fetch messages" do
           # change the poller implementation to raise SQS errors.
           had_error = false
@@ -201,7 +201,63 @@ describe LogStash::Inputs::SQS do
         end
       end
 
-      context "other errors" do
+      context "SQS error (retries)" do
+
+        it "retry to fetch messages" do
+          sleep_time = LogStash::Inputs::SQS::BACKOFF_SLEEP_TIME
+          expect(subject).to receive(:sleep).with(sleep_time)
+          expect(subject).to receive(:sleep).with(sleep_time * 2)
+          expect(subject).to receive(:sleep).with(sleep_time * 4)
+
+          error_count = 0
+          expect(mock_sqs).to receive(:poll).with(anything()).at_most(4) do
+            error_count += 1
+            if error_count <= 3
+              raise Aws::SQS::Errors::QueueDoesNotExist.new("testing", "testing exception (#{error_count})")
+            end
+
+            queue << payload
+          end
+
+          subject.run(queue)
+
+          expect(queue.size).to eq(1)
+          expect(queue.pop).to eq(payload)
+        end
+
+      end
+
+      context "networking error" do
+
+        before(:all) { require 'seahorse/client/networking_error' }
+
+        it "retry to fetch messages" do
+          sleep_time = LogStash::Inputs::SQS::BACKOFF_SLEEP_TIME
+          expect(subject).to receive(:sleep).with(sleep_time).twice
+
+          error_count = 0
+          expect(mock_sqs).to receive(:poll).with(anything()).at_most(5) do
+            error_count += 1
+            if error_count == 1
+              raise Seahorse::Client::NetworkingError.new(Net::OpenTimeout.new, 'timeout')
+            end
+            if error_count == 3
+              raise Seahorse::Client::NetworkingError.new(SocketError.new('spec-error'))
+            end
+
+            queue << payload
+          end
+
+          subject.run(queue)
+          subject.run(queue)
+
+          expect(queue.size).to eq(2)
+          expect(queue.pop).to eq(payload)
+        end
+
+      end
+
+      context "other error" do
         it "stops executing the code and raise the exception" do
           expect(mock_sqs).to receive(:poll).with(anything()).at_most(2) do
             raise RuntimeError
