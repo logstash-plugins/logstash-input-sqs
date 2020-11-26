@@ -62,13 +62,17 @@ A sample policy is as follows:
             "sqs:DeleteMessageBatch",
             "sqs:GetQueueAttributes",
             "sqs:GetQueueUrl",
-            "sqs:ListQueues",
             "sqs:ReceiveMessage"
           ],
           "Effect": "Allow",
           "Resource": [
             "arn:aws:sqs:us-east-1:123456789012:Logstash"
           ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": "sqs:ListQueues",
+            "Resource": "*"
         }
       ]
     }
