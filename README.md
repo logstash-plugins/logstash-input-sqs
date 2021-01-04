@@ -1,6 +1,6 @@
 # Logstash Plugin
 
-[![Travis Build Status](https://travis-ci.org/logstash-plugins/logstash-input-sqs.svg)](https://travis-ci.org/logstash-plugins/logstash-input-sqs)
+[![Travis Build Status](https://travis-ci.com/logstash-plugins/logstash-input-sqs.svg)](https://travis-ci.com/logstash-plugins/logstash-input-sqs)
 
 This is a plugin for [Logstash](https://github.com/elastic/logstash).
 
