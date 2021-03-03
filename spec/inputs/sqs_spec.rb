@@ -157,7 +157,7 @@ describe LogStash::Inputs::SQS do
 
       context 'can create multiple events' do
         require "logstash/codecs/json_lines"
-        let(:config) { super.merge({ "codec" => "json_lines" }) }
+        let(:config) { super().merge({ "codec" => "json_lines" }) }
         let(:first_message) { { "sequence" => "first" } }
         let(:second_message) { { "sequence" => "second" } }
         let(:encoded_message)  { double("sqs_message", :body => "#{LogStash::Json::dump(first_message)}\n#{LogStash::Json::dump(second_message)}\n") }
