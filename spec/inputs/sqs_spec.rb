@@ -49,6 +49,24 @@ describe LogStash::Inputs::SQS do
       expect { subject.register }.not_to raise_error
     end
 
+    context "when queue_aws_account_id option is specified" do
+      let(:queue_account_id) { "123456789012" }
+      let(:config) do
+        {
+          "region" => "us-east-1",
+          "access_key_id" => "123",
+          "secret_access_key" => "secret",
+          "queue" => queue_name,
+          "queue_owner_aws_account_id" => queue_account_id
+        }
+      end
+      it "passes the option to sqs client" do
+        expect(Aws::SQS::Client).to receive(:new).and_return(mock_sqs)
+        expect(mock_sqs).to receive(:get_queue_url).with({ :queue_name => queue_name, :queue_owner_aws_account_id => queue_account_id }).and_return({:queue_url => queue_url })
+        expect { subject.register }.not_to raise_error
+      end
+    end
+
     context "when interrupting the plugin" do
       before do
         expect(Aws::SQS::Client).to receive(:new).and_return(mock_sqs)
