@@ -1,3 +1,6 @@
+## 3.2.0
+  - Feature: Add `queue_owner_aws_account_id` parameter for cross-account queues [#60](https://github.com/logstash-plugins/logstash-input-sqs/pull/60)
+
 ## 3.1.3
   - Fix: retry networking errors (with backoff) [#57](https://github.com/logstash-plugins/logstash-input-sqs/pull/57)
 
