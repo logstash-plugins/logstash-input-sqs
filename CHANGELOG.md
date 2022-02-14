@@ -1,4 +1,4 @@
-## 3.2.0
+## 3.3.0
 - Feature: Add `additional_settings` option to fine-grain configuration of AWS client [#61](https://github.com/logstash-plugins/logstash-input-sqs/pull/61)
 
 ## 3.2.0
