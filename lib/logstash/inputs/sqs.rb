@@ -80,6 +80,8 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
 
   default :codec, "json"
 
+  config :additional_settings, :validate => :hash, :default => {}
+
   # Name of the SQS Queue name to pull messages from. Note that this is just the name of the queue, not the URL or ARN.
   config :queue, :validate => :string, :required => true
 
@@ -116,7 +118,8 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   end
 
   def setup_queue
-    aws_sqs_client = Aws::SQS::Client.new(aws_options_hash)
+    options = symbolized_settings.merge(aws_options_hash || {})
+    aws_sqs_client = Aws::SQS::Client.new(options)
     @poller = Aws::SQS::QueuePoller.new(queue_url(aws_sqs_client), :client => aws_sqs_client)
   rescue Aws::SQS::Errors::ServiceError, Seahorse::Client::NetworkingError => e
     @logger.error("Cannot establish connection to Amazon SQS", exception_details(e))
@@ -193,6 +196,25 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
     details[:sleep_time] = sleep_time if sleep_time
     details[:backtrace] = e.backtrace if @logger.debug?
     details
+  end
+
+  def symbolized_settings
+    @symbolized_settings ||= symbolize_keys_and_cast_true_false(@additional_settings)
+  end
+
+  def symbolize_keys_and_cast_true_false(hash)
+    case hash
+    when Hash
+      symbolized = {}
+      hash.each { |key, value| symbolized[key.to_sym] = symbolize_keys_and_cast_true_false(value) }
+      symbolized
+    when 'true'
+      true
+    when 'false'
+      false
+    else
+      hash
+    end
   end
 
 end # class LogStash::Inputs::SQS

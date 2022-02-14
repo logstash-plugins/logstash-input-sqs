@@ -1,3 +1,6 @@
+## 3.3.0
+- Feature: Add `additional_settings` option to fine-grain configuration of AWS client [#61](https://github.com/logstash-plugins/logstash-input-sqs/pull/61)
+
 ## 3.2.0
   - Feature: Add `queue_owner_aws_account_id` parameter for cross-account queues [#60](https://github.com/logstash-plugins/logstash-input-sqs/pull/60)
 

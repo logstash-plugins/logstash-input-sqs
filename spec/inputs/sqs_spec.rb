@@ -67,6 +67,42 @@ describe LogStash::Inputs::SQS do
       end
     end
 
+    describe "additional_settings" do
+      context "supported settings" do
+        let(:config) {
+          {
+            "additional_settings" => { "force_path_style" => 'true', "ssl_verify_peer" => 'false', "profile" => 'logstash' },
+            "queue" => queue_name
+          }
+        }
+
+        it 'should instantiate Aws::SQS clients with force_path_style set' do
+          expect(Aws::SQS::Client).to receive(:new).and_return(mock_sqs)
+          # mock a remote call to retrieve the queue URL
+          expect(mock_sqs).to receive(:get_queue_url).with({ :queue_name => queue_name }).and_return({:queue_url => queue_url })
+          expect(subject).to receive(:symbolized_settings) do |arg|
+            expect(arg).to include({:force_path_style => true, :ssl_verify_peer => false, :profile => 'logstash'})
+          end.and_call_original
+
+          expect { subject.register }.not_to raise_error
+        end
+      end
+
+      context "unsupported settings" do
+        let(:config) {
+          {
+            "additional_settings" => { "stub_responses" => 'true', "invalid_option" => "invalid" },
+            "queue" => queue_name
+          }
+        }
+
+        it 'must fail with ArgumentError' do
+          expect {subject.register}.to raise_error(ArgumentError, /invalid_option/)
+        end
+      end
+
+    end
+
     context "when interrupting the plugin" do
       before do
         expect(Aws::SQS::Client).to receive(:new).and_return(mock_sqs)
