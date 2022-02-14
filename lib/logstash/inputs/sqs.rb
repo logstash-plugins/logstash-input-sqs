@@ -200,8 +200,6 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
 
   def symbolized_settings
     @symbolized_settings ||= symbolize_keys_and_cast_true_false(@additional_settings)
-    puts "DNADBG>> @symbolized_settings: #{@symbolized_settings}, \n \n @additional_settings: #{@additional_settings}"
-    @symbolized_settings
   end
 
   def symbolize_keys_and_cast_true_false(hash)
