@@ -88,6 +88,19 @@ describe LogStash::Inputs::SQS do
         end
       end
 
+      context "unsupported settings" do
+        let(:config) {
+          {
+            "additional_settings" => { "stub_responses" => 'true', "invalid_option" => "invalid" },
+            "queue" => queue_name
+          }
+        }
+
+        it 'must fail with ArgumentError' do
+          expect {subject.register}.to raise_error(ArgumentError, /invalid_option/)
+        end
+      end
+
     end
 
     context "when interrupting the plugin" do
