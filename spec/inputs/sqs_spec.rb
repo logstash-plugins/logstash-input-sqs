@@ -80,9 +80,8 @@ describe LogStash::Inputs::SQS do
           expect(Aws::SQS::Client).to receive(:new).and_return(mock_sqs)
           # mock a remote call to retrieve the queue URL
           expect(mock_sqs).to receive(:get_queue_url).with({ :queue_name => queue_name }).and_return({:queue_url => queue_url })
-          expect(subject).to receive(:symbolized_settings) do |arg|
-            expect(arg).to include({:force_path_style => true, :ssl_verify_peer => false, :profile => 'logstash'})
-          end.and_call_original
+
+          expect(subject.aws_options_hash).to include({:force_path_style => true, :ssl_verify_peer => false, :profile => 'logstash'})
 
           expect { subject.register }.not_to raise_error
         end
