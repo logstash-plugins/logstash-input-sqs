@@ -1,5 +1,5 @@
 ## 3.3.1
-  - Refactoring: used logstash-mixin-aws to leverage shared code to manage `additional_settings` [#62](https://github.com/logstash-plugins/logstash-input-sqs/pull/62)
+  - Refactoring: used logstash-mixin-aws to leverage shared code to manage `additional_settings` [#64](https://github.com/logstash-plugins/logstash-input-sqs/pull/64)
 
 ## 3.3.0
   - Feature: Add `additional_settings` option to fine-grain configuration of AWS client [#61](https://github.com/logstash-plugins/logstash-input-sqs/pull/61)
