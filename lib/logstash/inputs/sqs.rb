@@ -119,7 +119,10 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
 
   def setup_queue
     aws_sqs_client = Aws::SQS::Client.new(aws_options_hash || {})
-    @poller = Aws::SQS::QueuePoller.new(queue_url(aws_sqs_client), :client => aws_sqs_client)
+    poller = Aws::SQS::QueuePoller.new(queue_url(aws_sqs_client), :client => aws_sqs_client)
+    poller.before_request { |stats| throw :stop_polling if stop? }
+
+    @poller = poller
   rescue Aws::SQS::Errors::ServiceError, Seahorse::Client::NetworkingError => e
     @logger.error("Cannot establish connection to Amazon SQS", exception_details(e))
     raise LogStash::ConfigurationError, "Verify the SQS queue name and your credentials"
