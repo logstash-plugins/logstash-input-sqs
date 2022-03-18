@@ -1,5 +1,5 @@
 ## 3.3.2
-  - Fix an issue that prevented timely shutdown when subscribed to an inactive queue
+  - Fix an issue that prevented timely shutdown when subscribed to an inactive queue [#65](https://github.com/logstash-plugins/logstash-input-sqs/pull/65)
 
 ## 3.3.1
   - Refactoring: used logstash-mixin-aws to leverage shared code to manage `additional_settings` [#64](https://github.com/logstash-plugins/logstash-input-sqs/pull/64)
