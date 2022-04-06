@@ -7,7 +7,7 @@
 #
 # As per https://github.com/aws/aws-sdk-ruby/issues/1301#issuecomment-261115960,
 # this patch may be short-lived anyway.
-require 'aws-sdk'
+require 'aws-sdk-sqs'
 
 begin
   old_stderr = $stderr
