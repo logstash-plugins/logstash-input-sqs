@@ -153,9 +153,9 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   #
   config :aws_credentials_file, :validate => :string
 
-  config :force_path_style, :validate => :string, :default =>  true
+  config :force_path_style, :validate => :string, :default => "true"
 
-  config :ssl_verify_peer, :validate => :string, :default => false
+  config :ssl_verify_peer, :validate => :string, :default => "false"
 
   config :profile, :validate => :string, :default => 'logstash'
 
