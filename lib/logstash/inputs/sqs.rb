@@ -153,12 +153,6 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   #
   config :aws_credentials_file, :validate => :string
 
-  config :force_path_style, :validate => :string, :default => "true"
-
-  config :ssl_verify_peer, :validate => :string, :default => "false"
-
-  config :profile, :validate => :string, :default => 'logstash'
-
   attr_reader :poller
 
   def register
@@ -202,13 +196,26 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
       opts[:endpoint] = @endpoint
     end
 
-    opts[:force_path_style] = @force_path_style
-
-    opts[:ssl_verify_peer] = @ssl_verify_peer
-
-    opts[:profile] = @profile
+    if respond_to?(:additional_settings)
+      opts = symbolize_keys_and_cast_true_false(additional_settings).merge(opts)
+    end
 
     return opts
+  end
+
+  def symbolize_keys_and_cast_true_false(hash)
+    case hash
+    when Hash
+      symbolized = {}
+      hash.each { |key, value| symbolized[key.to_sym] = symbolize_keys_and_cast_true_false(value) }
+      symbolized
+    when 'true'
+      true
+    when 'false'
+      false
+    else
+      hash
+    end
   end
 
   def setup_queue
