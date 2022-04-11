@@ -3,7 +3,6 @@
 require "logstash/inputs/threadable"
 require "logstash/namespace"
 require "logstash/timestamp"
-require "logstash/plugin_mixins/aws_config"
 require "logstash/errors"
 require 'logstash/inputs/sqs/patch'
 
@@ -66,7 +65,18 @@ Aws.eager_autoload!
 # See http://aws.amazon.com/iam/ for more details on setting up AWS identities.
 #
 class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
-  include LogStash::PluginMixins::AwsConfig::V2
+  CredentialConfig = Struct.new(
+    :access_key_id,
+    :secret_access_key,
+    :session_token,
+    :profile,
+    :instance_profile_credentials_retries,
+    :instance_profile_credentials_timeout,
+    :region)
+  RoleConfig = Struct.new(
+    :role_arn,
+    :role_session_name
+  )
 
   MAX_TIME_BEFORE_GIVING_UP = 60
   MAX_MESSAGES_TO_FETCH = 10 # Between 1-10 in the AWS-SDK doc
@@ -100,10 +110,57 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   # Polling frequency, default is 20 seconds
   config :polling_frequency, :validate => :number, :default => DEFAULT_POLLING_FREQUENCY
 
+  config :region, :validate => :string, :default => "us-east-1"
+
+  # This plugin uses the AWS SDK and supports several ways to get credentials, which will be tried in this order:
+  #
+  # 1. Static configuration, using `access_key_id` and `secret_access_key` params or `role_arn` in the logstash plugin config
+  # 2. External credentials file specified by `aws_credentials_file`
+  # 3. Environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+  # 4. Environment variables `AMAZON_ACCESS_KEY_ID` and `AMAZON_SECRET_ACCESS_KEY`
+  # 5. IAM Instance Profile (available when running inside EC2)
+  config :access_key_id, :validate => :string
+
+  # The AWS Secret Access Key
+  config :secret_access_key, :validate => :string
+
+  # Profile
+  config :profile, :validate => :string, :default => "default"
+
+  # The AWS Session token for temporary credential
+  config :session_token, :validate => :password
+
+  # URI to proxy server if required
+  config :proxy_uri, :validate => :string
+
+  # Custom endpoint to connect to s3
+  config :endpoint, :validate => :string
+
+  # The AWS IAM Role to assume, if any.
+  # This is used to generate temporary credentials typically for cross-account access.
+  # See https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html for more information.
+  config :role_arn, :validate => :string, :required => false
+
+  # Session name to use when assuming an IAM role
+  config :role_session_name, :validate => :string, :default => "logstash"
+
+  # Path to YAML file containing a hash of AWS credentials.
+  # This file will only be loaded if `access_key_id` and
+  # `secret_access_key` aren't set. The contents of the
+  # file should look like this:
+  #
+  # [source,ruby]
+  # ----------------------------------
+  #     :access_key_id: "12345"
+  #     :secret_access_key: "54321"
+  # ----------------------------------
+  #
+  config :aws_credentials_file, :validate => :string
+
   attr_reader :poller
 
   def register
-    require "aws-sdk"
+    require "aws-sdk-sqs"
     @logger.info("Registering SQS input", :queue => @queue, :queue_owner_aws_account_id => @queue_owner_aws_account_id)
 
     setup_queue
@@ -114,6 +171,59 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
       return aws_sqs_client.get_queue_url({:queue_name => @queue, :queue_owner_aws_account_id => @queue_owner_aws_account_id})[:queue_url]
     else
       return aws_sqs_client.get_queue_url(:queue_name => @queue)[:queue_url]
+    end
+  end
+
+  def aws_options_hash
+    opts = {}
+
+    if @access_key_id.is_a?(NilClass) ^ @secret_access_key.is_a?(NilClass)
+      @logger.warn("Likely config error: Only one of access_key_id or secret_access_key was provided but not both.")
+    end
+
+    if @role_arn
+      credential_config = RoleConfig.new(@role_arn, @role_session_name)
+      @credentials = Aws::AssumeRoleCredentials.new(credential_config)
+    else
+      credential_config = CredentialConfig.new(@access_key_id, @secret_access_key, @session_token, @profile, 0, 1, @region)
+      @credentials = Aws::CredentialProviderChain.new(credential_config).resolve
+    end
+
+    opts[:credentials] = @credentials
+
+    opts[:http_proxy] = @proxy_uri if @proxy_uri
+
+    if self.respond_to?(:aws_service_endpoint)
+      # used by CloudWatch to basically do the same as bellow (returns { region: region })
+      opts.merge!(self.aws_service_endpoint(@region))
+    else
+      # NOTE: setting :region works with the aws sdk (resolves correct endpoint)
+      opts[:region] = @region
+    end
+
+    if !@endpoint.is_a?(NilClass)
+      opts[:endpoint] = @endpoint
+    end
+
+    if respond_to?(:additional_settings)
+      opts = symbolize_keys_and_cast_true_false(additional_settings).merge(opts)
+    end
+
+    return opts
+  end
+
+  def symbolize_keys_and_cast_true_false(hash)
+    case hash
+    when Hash
+      symbolized = {}
+      hash.each { |key, value| symbolized[key.to_sym] = symbolize_keys_and_cast_true_false(value) }
+      symbolized
+    when 'true'
+      true
+    when 'false'
+      false
+    else
+      hash
     end
   end
 
