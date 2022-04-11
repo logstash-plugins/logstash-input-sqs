@@ -73,6 +73,10 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
     :instance_profile_credentials_retries,
     :instance_profile_credentials_timeout,
     :region)
+  RoleConfig = Struct.new(
+    :role_arn,
+    :role_session_name
+  )
 
   MAX_TIME_BEFORE_GIVING_UP = 60
   MAX_MESSAGES_TO_FETCH = 10 # Between 1-10 in the AWS-SDK doc
@@ -135,7 +139,7 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   # The AWS IAM Role to assume, if any.
   # This is used to generate temporary credentials typically for cross-account access.
   # See https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html for more information.
-  config :role_arn, :validate => :string
+  config :role_arn, :validate => :string, :required => false
 
   # Session name to use when assuming an IAM role
   config :role_session_name, :validate => :string, :default => "logstash"
@@ -177,8 +181,13 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
       @logger.warn("Likely config error: Only one of access_key_id or secret_access_key was provided but not both.")
     end
 
-    credential_config = CredentialConfig.new(@access_key_id, @secret_access_key, @session_token, @profile, 0, 1, @region)
-    @credentials = Aws::CredentialProviderChain.new(credential_config).resolve
+    if @role_arn
+      credential_config = RoleConfig.new(@role_arn, @role_session_name)
+      @credentials = Aws::AssumeRoleCredentials.new(credential_config)
+    else
+      credential_config = CredentialConfig.new(@access_key_id, @secret_access_key, @session_token, @profile, 0, 1, @region)
+      @credentials = Aws::CredentialProviderChain.new(credential_config).resolve
+    end
 
     opts[:credentials] = @credentials
 
