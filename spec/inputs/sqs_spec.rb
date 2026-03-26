@@ -5,7 +5,7 @@ require "logstash/inputs/sqs"
 require "logstash/errors"
 require "logstash/event"
 require "logstash/json"
-require "aws-sdk"
+require "aws-sdk-sqs"
 require "ostruct"
 
 describe LogStash::Inputs::SQS do

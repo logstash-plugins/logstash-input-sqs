@@ -5,13 +5,6 @@ require "logstash/namespace"
 require "logstash/timestamp"
 require "logstash/plugin_mixins/aws_config"
 require "logstash/errors"
-require 'logstash/inputs/sqs/patch'
-
-# Forcibly load all modules marked to be lazily loaded.
-#
-# It is recommended that this is called prior to launching threads. See
-# https://aws.amazon.com/blogs/developer/threading-with-the-aws-sdk-for-ruby/.
-Aws.eager_autoload!
 
 # Pull events from an Amazon Web Services Simple Queue Service (SQS) queue.
 #
@@ -103,7 +96,7 @@ class LogStash::Inputs::SQS < LogStash::Inputs::Threadable
   attr_reader :poller
 
   def register
-    require "aws-sdk"
+    require "aws-sdk-sqs"
     @logger.info("Registering SQS input", :queue => @queue, :queue_owner_aws_account_id => @queue_owner_aws_account_id)
 
     setup_queue
